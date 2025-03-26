@@ -1,0 +1,14 @@
+name: tz_water_pump_function_prediction
+channels:
+  - conda-forge
+dependencies:
+  - python=3.13
+  - pip
+  - typer
+  - loguru
+  - tqdm
+  - ruff
+  - pip:
+    - python-dotenv
+    - mkdocs
+    - -e .
