@@ -1,61 +1,91 @@
 # Pump It Up Data Mining the Water Table
-
-<a target="_blank" href="https://cookiecutter-data-science.drivendata.org/">
-    <img src="https://img.shields.io/badge/CCDS-Project%20template-328F97?logo=cookiecutter" />
-</a>
-
-Predicting water pump function in Tanzania.
+This repository contains a data science project to predict the functional status of water pumps in Tanzania, based on open data from [DrivenData](https://www.drivendata.org/competitions/7/pump-it-up-data-mining-the-water-table/). The workflow is fully reproducible and organized for clarity and collaboration.
 
 ## Project Organization
 
 ```
-├── LICENSE            <- Open-source license if one is chosen
-├── Makefile           <- Makefile with convenience commands like `make data` or `make train`
-├── README.md          <- The top-level README for developers using this project.
+├── README.md          <- Project documentation
 ├── data
-│   ├── external       <- Data from third party sources.
-│   ├── interim        <- Intermediate data that has been transformed.
-│   ├── processed      <- The final, canonical data sets for modeling.
-│   └── raw            <- The original, immutable data dump.
-│
-├── docs               <- A default mkdocs project; see www.mkdocs.org for details
-│
-├── models             <- Trained and serialized models, model predictions, or model summaries
-│
-├── notebooks          <- Jupyter notebooks. Naming convention is a number (for ordering),
-│                         the creator's initials, and a short `-` delimited description, e.g.
-│                         `1.0-jqp-initial-data-exploration`.
-│
-├── pyproject.toml     <- Project configuration file with package metadata for 
-│                         pump_it_up_data_mining_the_water_table and configuration for tools like black
-│
+│   ├── processed      <- Cleaned data files
+│   └── raw            <- Original data files
+├── eda                <- EDA outputs
+├── figures            <- Final visualizations
+├── models             <- Saved models
 ├── references         <- Data dictionaries, manuals, and all other explanatory materials.
-│
 ├── reports            <- Generated analysis as HTML, PDF, LaTeX, etc.
-│   └── figures        <- Generated graphics and figures to be used in reporting
-│
-├── requirements.txt   <- The requirements file for reproducing the analysis environment, e.g.
-│                         generated with `pip freeze > requirements.txt`
-│
-├── setup.cfg          <- Configuration file for flake8
-│
-└── pump_it_up_data_mining_the_water_table   <- Source code for use in this project.
-    │
-    ├── __init__.py             <- Makes pump_it_up_data_mining_the_water_table a Python module
-    │
-    ├── config.py               <- Store useful variables and configuration
-    │
-    ├── dataset.py              <- Scripts to download or generate data
-    │
-    ├── features.py             <- Code to create features for modeling
-    │
-    ├── modeling                
-    │   ├── __init__.py 
-    │   ├── predict.py          <- Code to run model inference with trained models          
-    │   └── train.py            <- Code to train models
-    │
-    └── plots.py                <- Code to create visualizations
+├── scripts            <- R scripts
 ```
+
+
+## Workflow Overview
+
+0. **Analysis Logging**  
+   - Script: `scripts/00_analysis_log.md`  
+   - Documents key steps, decisions, and changes in data analysis.
+
+1. **Data Import and Cleaning**  
+   - Script: `scripts/01_data_import_cleaning.R`  
+   - Loads raw data, applies cleaning steps, and saves processed data.
+
+2. **Exploratory Data Analysis (EDA)**  
+   - Script: `scripts/02_exploratory_analysis.R`  
+   - Generates summary statistics and initial data visualizations.
+
+3. **Modeling and Analysis**  
+   - Script: `scripts/03_analysis.R`  
+   - Builds predictive models and saves model objects.
+
+4. **Visualization**  
+   - Script: `scripts/04_data_visualization.R`  
+   - Creates and saves publication-quality plots.
+
+5. **Reporting**  
+   - R Markdown: `05_report.Rmd`  
+   - Integrates results, visualizations, and interpretations into a final report.
+
+## How to Run
+
+1. **Clone the repository**
+    ```
+    git clone https://github.com/jarretangbazo/tz_water_pump_function_prediction.git
+    cd tz_water_pump_function_prediction
+    ```
+
+2. **Open the RStudio project file**  
+   Open `tz_water_pump_function_prediction.Rproj` in RStudio.
+
+3. **Install required packages**  
+   Use the following in your R console:
+    ```
+    install.packages(c("tidyverse", "here", "skimr", "tidymodels", "knitr"))
+    ```
+
+4. **Run scripts in order**  
+   - Run each script in `scripts/` sequentially, or source them from the R console.
+   - NOTE: `00_analysis_log.md` is updated after all analysis is run.
+
+5. **Render the report**  
+   - Knit `05_report.Rmd` to generate the final HTML report.
+
+## Reproducibility
+
+- All paths use the [`here`](https://CRAN.R-project.org/package=here) package for consistency.
+- For package management, consider using [`renv`](https://rstudio.github.io/renv/).
+- All scripts are modular and can be run independently.
+
+## Data
+
+- **Source:** [DrivenData Water Pump Dataset](https://www.drivendata.org/competitions/7/pump-it-up-data-mining-the-water-table/data/)
+- **License:** See data provider’s terms.
+
+## Authors
+
+- Jarret Angbazo
+
+## License
+
+This project is licensed under the MIT License. See `LICENSE` for details.
+
 
 --------
 
