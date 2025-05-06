@@ -7,6 +7,7 @@
 # Load libraries
 library(tidyverse)
 library(here)
+#renv::snapshot()
 
 # Create directories if missing
 dir.create(here("data", "processed"), showWarnings = FALSE)
