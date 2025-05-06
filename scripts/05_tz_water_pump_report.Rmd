@@ -1,0 +1,220 @@
+---
+title: "Tanzania Water Pump Functionality Analysis Report"
+subtitle: "`r params$region` (`r params$start_year`-)"
+author: "Jarret Angbazo"
+date: "`r format(Sys.Date(), '%B %d, %Y')`"
+output: 
+  html_document:
+    toc: true
+    toc_depth: 3
+    code_folding: hide
+params:
+  region: "All Regions"
+  start_year: 2010
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, warning=FALSE, message=FALSE)
+library(tidyverse)
+library(here)
+library(knitr)
+library(kableExtra)
+
+# Load cleaned data and model results
+cleaned_data <- read_csv(here("data", "processed", "cleaned_pump_data.csv"))
+model_performance <- read_csv(here("models", "model_performance.csv"))
+final_metrics <- read_csv(here("viz", "model_performance_summary.csv"))
+
+```
+
+# Executive Summary {-}
+*For Exec Summary, 2-3 concise paragraphs summarizing key findings, policy implications, and recommended actions. Highlight predictive performance metrics and top determinants of pump functionality.*
+
+"Our analysis of `r params$region`'s water pumps installed since `r params$start_year` reveals that **X%** of pumps are non-functional, with maintenance costs estimated at $Y million annually. The Random Forest model achieved **`r final_metrics %>% filter(.metric == "accuracy") %>% pull(.estimate) %>% round(3)` accuracy** in predicting pump status, identifying `r top_features[1]` as the most critical predictive factor."
+
+---
+
+## Introduction
+
+### Project Background
+*Describe development context including:*
+- Current water access stats in Tanzania [cite WB, other reports]
+- Economic and health impacts of non-functional pumps
+- WB's strategic objectives in this initiative
+
+"Access to clean water remains a critical challenge in Tanzania, with `r percentage_nonfunctional`% of rural water points reported non-functional in recent surveys (World Bank, 2024). This analysis supports the `r params$region` Regional Water Authority's maintenance optimization strategy through predictive modeling of pump functionality."
+
+### Problem Statement
+*Explain the analytical challenge:*
+- Current maintenance challenges
+- Data availability from Taarifa/Tanzania Ministry of Water
+- Specific prediction task (3-class classification: functional/needs repair/non-functional)
+
+---
+
+## Data Description
+
+### Data Sources
+```{r import-raw, include=FALSE}
+raw_data <- read_csv(here("data", "raw", "water_pumps.csv")) %>%
+  filter(
+    region == params$region,
+    year(install_date) >= params$start_year
+  )
+
+# Validate parameters
+if(!params$region %in% unique(raw_data$region)) stop("Invalid region specified")
+if(params$start_year < 2000) stop("Start year must be >= 2000")
+
+
+
+```
+*Describe:*
+- Original data collection methodology
+- Temporal coverage of dataset
+- Key variables (include table of 5-10 critical features)
+
+### Data Preprocessing
+```{r data-cleaning-pipeline, include=FALSE}
+source(here("scripts","01_data_import_cleaning.R"))
+
+cleaned_data %>%
+select(region, installation_date, status_group) %>%
+skim() %>%
+kable(caption = "Data Summary") %>%
+kable_styling(bootstrap_options = "striped")
+```
+*Document:*
+- Missing data handling strategy
+- Feature engineering steps (e.g., temporal features from installation dates)
+- Class imbalance mitigation approaches
+
+---
+
+## Exploratory Data Analysis
+
+### Spatial Patterns
+```{r spatial-patterns-code, include=FALSE}
+source(here("scripts", "02_exploratory_data_analysis.R"))
+```
+*Describe geographical distribution of pump statuses*
+
+### Temporal Trends
+```{r time-trends-code, include=FALSE}
+'time series analysis code'
+```
+*Analyze maintenance patterns and pump lifespans*
+
+---
+
+## Modeling Approach
+```{r modeling-code, include=FALSE}
+source(here("scripts", "03_modeling_analysis.R"))
+
+# NOTE: Run data viz script AFTER modeling script
+source(here("scripts", "04_data_visualization.R"))
+
+```
+
+### Methodology
+*Justify technical approach/choices:*
+- Model selection rationale (e.g., XGBoost vs. GLM)
+-- Models used: XGB, SGD, Softmax Logistic Regression, Linear SVM, Decision Trees, Random Forests, AdaBoost
+- Validation strategy (nested cross-validation)
+- Feature importance analysis methods
+
+### Analytical Approach
+*Describe your methodology:*
+
+1. **Predictive Task:** 3-class classification (functional/non-functional/needs repair)
+2. **Features Used:** `r ncol(cleaned_data) - 1` parameters including installation year, pump type, and water quality metrics
+3. **Model Architecture:** Ensemble of Random Forest and XGBoost classifiers
+4. **Validation:** Nested cross-validation with `r cv_folds$id %>% unique() %>% length()` folds
+
+---
+
+### Model Performance
+
+```{r model-comparison-code, include=FALSE}
+knitr::include_graphics(here("viz", "feature_importance_rf.png"))
+```
+
+## Results
+*Interpretation placeholder:*
+"Geospatial features (`r top_features[1]`) and maintenance records (`r top_features[2]`) emerged as strongest predictors, suggesting regional disparities in maintenance effectiveness."
+
+### Model Performance
+
+
+### Key Predictive Features
+```{r key-features, include=FALSE}
+final_metrics %>%
+kable(caption = "Model Performance Metrics") %>%
+kable_styling(full_width = FALSE) %>%
+row_spec(0, bold = TRUE)
+```
+*Model comparison table code:*
+| Model          | AUC-ROC | Precision | Recall | F1-Score |
+|----------------|---------|-----------|--------|----------|
+| XGBoost        | --      | --        | --     | --       |
+| Random Forest  | --      | --        | --     | --       |
+
+
+
+
+---
+
+## Policy Implications
+
+### Priority Intervention Areas
+### Maintenance Prioritization Framework
+*Replace with your recommendations:*
+*Map model insights to actionable recommendations:*
+1. Top 3 predictive features requiring policy attentions
+2. Cost-Benefit analysis of different maintenance strategies
+3. Risk stratification framework for pump monitoring
+
+```{r policy-implications, include=FALSE}
+knitr::include_graphics(here("viz", "status_by_region.png"))
+```
+1. **High Priority:** Districts with >30% non-functional pumps
+2. **Preventive Maintenance:** Pumps showing `r params$start_year + 5` installation cohort degradation patterns
+3. **Resource Allocation:** Target `r top_features[1]` improvements in `r params$region`
+
+---
+
+## Conclusion
+
+*Synthesize key findings and next steps:*
+- Model limitations and validation needs
+- Recommendations for data collection improvements
+- Scaling potential to other WB water initiatives
+
+"This analysis demonstrates that machine learning can predict pump functionality with `r final_metrics %>% filter(.metric == "roc_auc") %>% pull(.estimate) %>% round(3)` AUC-ROC accuracy. Recommended next steps include..."
+
+---
+
+## Appendix
+
+### Reproducibility
+```{r append-reproducibility, include=FALSE}
+sessioninfo::session_info() %>%
+pluck("packages") %>%
+select(package, version) %>%
+kable(caption = "Package Versions") %>%
+kable_styling(bootstrap_options = "condensed")
+```
+
+### Full Feature List
+*Table of all variables with descriptions*
+```r
+# Create table with variable, cleaning action taken, and justification.
+# For example:
+# | Variable       | Description                | Example           |
+# |----------------|----------------------------|-------------------|
+# | amount_tsh     | Total static head...       | 300.0             |
+# | date_recorded  | Date the row was entered   | 2013-02-26        |
+# | funder         | Who funded the well        | Germany Republic  |
+```
+
+

@@ -9,7 +9,7 @@ This repository contains a data science project to predict the functional status
 │   ├── processed      <- Cleaned data files
 │   └── raw            <- Original data files
 ├── eda                <- EDA outputs
-├── figures            <- Final visualizations
+├── viz                <- Final visualizations
 ├── models             <- Saved models
 ├── references         <- Data dictionaries, manuals, and all other explanatory materials.
 ├── reports            <- Generated analysis as HTML, PDF, LaTeX, etc.
@@ -18,10 +18,6 @@ This repository contains a data science project to predict the functional status
 
 
 ## Workflow Overview
-
-0. **Analysis Logging**  
-   - Script: `scripts/00_analysis_log.md`  
-   - Documents key steps, decisions, and changes in data analysis.
 
 1. **Data Import and Cleaning**  
    - Script: `scripts/01_data_import_cleaning.R`  
@@ -40,8 +36,14 @@ This repository contains a data science project to predict the functional status
    - Creates and saves publication-quality plots.
 
 5. **Reporting**  
-   - R Markdown: `05_report.Rmd`  
+   - R Markdown: `05_tz_water_pump_report.Rmd`  
    - Integrates results, visualizations, and interpretations into a final report.
+
+**Analysis Logging**  
+   - Script: `scripts/Analysis_Log.md`  
+   - Documents key steps, decisions, and changes in data analysis.
+
+
 
 ## How to Run
 
@@ -62,10 +64,10 @@ This repository contains a data science project to predict the functional status
 
 4. **Run scripts in order**  
    - Run each script in `scripts/` sequentially, or source them from the R console.
-   - NOTE: `00_analysis_log.md` is updated after all analysis is run.
+   - NOTE: `Analysis_Log.md` is updated after all analysis is run.
 
 5. **Render the report**  
-   - Knit `05_report.Rmd` to generate the final HTML report.
+   - Knit `05_tz_water_pump_report.Rmd` to generate the final HTML report.
 
 ## Reproducibility
 
