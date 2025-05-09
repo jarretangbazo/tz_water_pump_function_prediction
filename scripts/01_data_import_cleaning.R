@@ -11,7 +11,7 @@
 library(tidyverse)
 library(here)
 library(janitor)
-library(lubridate)
+#library(lubridate)
 #renv::snapshot()
 
 # Set logs
@@ -31,16 +31,26 @@ dir.create(here("data", "processed"), showWarnings = FALSE, recursive = TRUE)
 cat("\n--- Importing Raw Data ---\n")
 
 # Import raw data
-# - Source: data/raw/water_pumps.csv
+# - Source: https://www.drivendata.org/competitions/7/pump-it-up-data-mining-the-water-table/data/
 train_values <- read_csv(
-  here("data", "raw", "train_values.csv"),
-  col_types = cols(.default = col_character())
-) %>% clean_names()
+  here("data", "raw", "tz_train_values.csv"),
+  col_types = cols(
+    permit = col_logical(),
+    public_meeting = col_logical()
+    )
+  ) %>% clean_names()
+
 
 train_labels <- read_csv(
-  here("data", "raw", "train_labels.csv"),
-  col_types = cols(.default = col_character())
-) %>% clean_names()
+  here("data", "raw", "tz_train_labels.csv"),
+  col_types = cols(
+    status_group = col_factor(
+      levels = c("functional", "functional needs repair", "non functional"), 
+      ordered = TRUE
+      )
+    )
+  ) %>% 
+  clean_names() 
 
 
 # --------------------------
@@ -53,6 +63,174 @@ train_labels <- read_csv(
 # - drop irrelevant features
 # - dealing with numerics, e.g. dealing with zeros, scaling numeric values, binning values, handling outliers, dealing with datetime, dimension reduction for categorical data
 cat("\n--- Cleaning Data ---\n")
+
+# Merge Data
+merged_data <- train_values %>%
+  left_join(train_labels, by = "id") %>% 
+  arrange(id)
+
+## Check for duplicated IDs
+duplicate_ids <- merged_data %>% 
+  count(id) %>% 
+  filter(n > 1)
+
+## Check ID mapped to unique WPT_NAME
+problem_ids <- merged_data %>% 
+  group_by(id) %>% 
+  summarise(wpt_name_count = n_distinct(wpt_name)) %>% 
+  filter(wpt_name_count > 1)
+# NOTE: No ID w/ more than one WPT_NAME
+
+problem_names <- merged_data %>% 
+  group_by(wpt_name) %>% 
+  summarise(id_count = n_distinct(id)) %>% 
+  filter(id_count > 1)
+# NOTE: WPT_NAME to ID is not 1:1
+
+
+## Clean CHAR VARS -- check for duplicates based on inconsistent spelling
+charvars_spell_check <- merged_data %>% 
+  select("id", "funder", "installer", "wpt_name") %>% 
+  mutate(
+    across(
+      .cols = where(is.character),
+      .fns = list(
+        cleaned = ~str_to_lower(str_squish(.))
+      ),
+      .names = "{.col}_cleaned"
+    )
+  ) 
+
+charvars_n_distinct <- charvars_spell_check %>% 
+  summarise(across(everything(), ~n_distinct(.)))
+
+
+## Check Tanzania Administrative Divisons Map Well To Each Other
+## REGION > LGA (DISTRICT) > WARD > SUBVILLAGE    
+
+charvars_spell_check %>% 
+  
+
+  char_num_unique_values <- train_values %>% 
+  select(where(is.character)) %>% 
+  summarise(across(everything(), ~n_distinct(.))) %>% 
+  pivot_longer(everything(), names_to = "variable", values_to = "n_unique") %>% 
+  arrange(desc(n_unique))
+
+## Summary Statistics
+merged_summ_stats <- merged_data %>% 
+  summarise(across(where(is.numeric),
+                   .fns = list(
+                     min = ~min(., na.rm = TRUE),
+                     median = ~median(., na.rm = TRUE),
+                     mean = ~mean(., na.rm = TRUE),
+                     stdev = ~sd(., na.rm = TRUE),
+                     q25 = ~quantile(., 0.25, na.rm = TRUE),
+                     q75 = ~quantile(., 0.75, na.rm = TRUE),
+                     max = ~max(., na.rm = TRUE)
+                   )
+                   )) %>% 
+  pivot_longer(
+    everything(),
+    names_pattern = "^(.*)_(min|median|mean|stdev|q25|q75|max)$",
+    names_to = c("variable", ".value")
+  )
+
+
+
+## TRAIN_VALUES
+### Missing count - numeric variables
+train_values %>% 
+  summarise(across(where(is.numeric), ~sum(is.na(.))))
+
+### Summary Statistics Table
+train_values_summ_stats <- train_values %>% 
+  summarise(across(where(is.numeric),
+            .fns = list(
+              min = ~min(., na.rm = TRUE),
+              median = ~median(., na.rm = TRUE),
+              mean = ~mean(., na.rm = TRUE),
+              stdev = ~sd(., na.rm = TRUE),
+              q25 = ~quantile(., 0.25, na.rm = TRUE),
+              q75 = ~quantile(., 0.75, na.rm = TRUE),
+              max = ~max(., na.rm = TRUE)
+              )
+            )) %>% 
+  pivot_longer(
+    everything(),
+    names_pattern = "^(.*)_(min|median|mean|stdev|q25|q75|max)$",
+    names_to = c("variable", ".value")
+  )
+
+
+# Need to determine which char vars to drop, which to keep based on correlation with outcome of interest
+
+char_num_unique_values <- train_values %>% 
+  select(where(is.character)) %>% 
+  summarise(across(everything(), ~n_distinct(.))) %>% 
+  pivot_longer(everything(), names_to = "variable", values_to = "n_unique") %>% 
+  arrange(desc(n_unique))
+
+train_values %>% 
+  count(installer, sort = TRUE)
+
+
+
+train_values_char_proper_names <- train_values %>% 
+  select("id", c("installer", "funder", "scheme_name", "ward", "lga", "subvillage", "wpt_name", "basin", "region"))
+
+train_values_char_factor <- train_values %>% 
+  select("id", where(is.character), -c("installer", "funder", "scheme_name", "ward", "lga", "subvillage", "wpt_name", "basin", "region"))
+
+train_values_char_proper_names %>% 
+  map(unique)
+
+### Check ID mapped to exactly one WPT_NAME
+id_wpt_check <- train_values_char_proper_names %>% 
+  group_by(id) %>% 
+  summarise(n_wpt = n_distinct(wpt_name), .groups = "drop") %>% 
+  filter(n_wpt > 1)
+
+problem_ids <- id_wpt_check %>% 
+  filter(n_wpt > 1)
+# NOTE: ID & WPT_NAME are mapped 1:1
+
+lga_check <- train_values_char_proper_names %>% 
+  group_by(region) %>% 
+  summarise(n_districts_in_region = n_distinct(lga), .groups = "drop")
+
+
+train_values_char_proper_names %>% 
+  filter(region == "Arusha") %>% 
+  filter(lga == "Ngorongoro") %>% 
+  filter(ward == "Ngorongoro") %>% 
+  map(unique)
+#  select(lga) %>% 
+#  map(unique)
+
+train_values_char_proper_names %>% 
+  group_by(region) %>% 
+  map(unique)
+
+train_values_char_factor %>% 
+  map(unique)
+
+
+
+
+  count(waterpoint_type)
+
+
+train_labels %>% 
+  ggplot(aes(status_group, fill = status_group)) +
+  geom_bar() + 
+  labs(x = NULL, y = NULL)
+
+
+
+
+
+
 
 merged_data <- train_values %>%
   left_join(train_labels, by = "id") %>%
