@@ -53,6 +53,12 @@ train_labels <- read_csv(
   clean_names() 
 
 
+# Merge Data
+merged_data <- train_values %>%
+  left_join(train_labels, by = "id") %>% 
+  arrange(id)
+
+
 # --------------------------
 # Clean Data
 # --------------------------
@@ -64,28 +70,55 @@ train_labels <- read_csv(
 # - dealing with numerics, e.g. dealing with zeros, scaling numeric values, binning values, handling outliers, dealing with datetime, dimension reduction for categorical data
 cat("\n--- Cleaning Data ---\n")
 
-# Merge Data
-merged_data <- train_values %>%
-  left_join(train_labels, by = "id") %>% 
-  arrange(id)
 
-## Check for duplicated IDs
-duplicate_ids <- merged_data %>% 
+# Clean ID
+## Remove duplicate IDs
+merged_data %>% 
   count(id) %>% 
   filter(n > 1)
 
-## Check ID mapped to unique WPT_NAME
+## Check ID/WPT_NAME mapping is 1:1
 problem_ids <- merged_data %>% 
   group_by(id) %>% 
   summarise(wpt_name_count = n_distinct(wpt_name)) %>% 
   filter(wpt_name_count > 1)
 # NOTE: No ID w/ more than one WPT_NAME
 
-problem_names <- merged_data %>% 
+problem_wpt_name <- merged_data %>% 
   group_by(wpt_name) %>% 
   summarise(id_count = n_distinct(id)) %>% 
   filter(id_count > 1)
-# NOTE: WPT_NAME to ID is not 1:1
+# NOTE: WPT_NAME to ID is not 1:1 -- will use id as unique identifier and will drop 'wpt_name'
+
+
+# Clean Administrative Division Variables
+## Cleaned Admin Division names
+admin_division_check <- merged_data %>% 
+  mutate(
+    across(
+      .cols = c("subvillage", "region", "lga", "ward", "basin"),
+      .fns = list(
+        cleaned = ~str_to_lower(str_squish(.))
+      ),
+      .names = "{.col}_clean"
+    )
+  )
+
+## Check REGION mapped to unique REGION_CODE
+problem_region <- merged_data %>% 
+  group_by(region) %>% 
+  summarise(reg_code_count = n_distinct(region_code)) %>% 
+  filter(reg_code_count > 1)
+
+## Clean Administrative Division Names
+## REGION > LGA (DISTRICT) > WARD > SUBVILLAGE
+
+
+
+
+  group_by(subvillage) %>% 
+  summarise(n_wards = n_distinct(ward))
+
 
 
 ## Clean CHAR VARS -- check for duplicates based on inconsistent spelling
@@ -105,8 +138,7 @@ charvars_n_distinct <- charvars_spell_check %>%
   summarise(across(everything(), ~n_distinct(.)))
 
 
-## Check Tanzania Administrative Divisons Map Well To Each Other
-## REGION > LGA (DISTRICT) > WARD > SUBVILLAGE    
+    
 
 charvars_spell_check %>% 
   
