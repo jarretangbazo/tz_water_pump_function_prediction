@@ -1,5 +1,6 @@
 # Exclude all raw and large data files
 data/raw/
+data/tz_shapefile
 # data/large/
 *.csv
 *.tsv

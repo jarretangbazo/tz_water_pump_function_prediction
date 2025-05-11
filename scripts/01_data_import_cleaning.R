@@ -11,6 +11,7 @@
 library(tidyverse)
 library(here)
 library(janitor)
+library(sf)
 #library(lubridate)
 #renv::snapshot()
 
@@ -99,9 +100,17 @@ geog_data_validation <- merged_data %>%
   mutate(
     invalid_coords_flag = is.na(latitude) | is.na(longitude) | latitude < -12 | latitude > 0 | longitude < 29 | longitude > 41
     )
+  ## Flag inconsistencies in region/region_code
 
 
-  mutate(
+tanzania_regions <- st_read(here("data", "tz_shapefile", "nbs_tz_shapefiles", "Tanzania GIS Maps", "Tanzania.shp"))
+
+
+geog_data_validation %>% 
+  count(region, region_code) %>% 
+  print(n = 100)
+
+  mutate(mutate(mutate(
     across(
       .cols = c("subvillage", "region", "lga", "ward", "basin","funder","installer","wpt_name"),
       .fns = list(
