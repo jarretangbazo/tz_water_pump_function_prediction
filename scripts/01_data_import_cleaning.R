@@ -91,12 +91,19 @@ problem_wpt_name <- merged_data %>%
 # NOTE: WPT_NAME to ID is not 1:1 -- will use id as unique identifier and will drop 'wpt_name'
 
 
-# Clean Administrative Division Variables
-## Cleaned Admin Division names
-admin_division_check <- merged_data %>% 
+# Clean/Validate Geographic Data
+geog_data_validation <- merged_data %>% 
+  select("id", "longitude", "latitude", "basin", "subvillage", "region", "region_code", "district_code", "lga", "ward") %>% 
+  ## Flag missing/implausible geographic coordinates. 
+  ### Tanzania lat/long range: 1 to 12 degrees south (lat); 29 to 41 degrees east (long)
+  mutate(
+    invalid_coords_flag = is.na(latitude) | is.na(longitude) | latitude < -12 | latitude > 0 | longitude < 29 | longitude > 41
+    )
+
+
   mutate(
     across(
-      .cols = c("subvillage", "region", "lga", "ward", "basin"),
+      .cols = c("subvillage", "region", "lga", "ward", "basin","funder","installer","wpt_name"),
       .fns = list(
         cleaned = ~str_to_lower(str_squish(.))
       ),
@@ -104,15 +111,63 @@ admin_division_check <- merged_data %>%
     )
   )
 
+admin_division_map <- admin_division_check %>% 
+  count(region,lga,ward) %>% 
+  arrange(desc(region))
+
+
+table(admin_division_check$basin)
+
+
+
+admin_division_check %>% 
+  count(extraction_type_class) %>% 
+  arrange(desc(n)) %>% 
+  print(n=2100)
+
+
+# admin_division_map <- admin_division_check %>% 
+#  distinct(region, lga, ward)
+admin_division_map <- admin_division_check %>% 
+  count(region, lga, ward) %>% 
+  arrange(desc(n))
+
+
+  
+
+merged_data %>% 
+  select(where(is.character) %>% 
+  map(unique)
+
 ## Check REGION mapped to unique REGION_CODE
-problem_region <- merged_data %>% 
-  group_by(region) %>% 
+problem_region <- admin_division_check %>% 
+  group_by(region_clean) %>% 
   summarise(reg_code_count = n_distinct(region_code)) %>% 
   filter(reg_code_count > 1)
 
 ## Clean Administrative Division Names
 ## REGION > LGA (DISTRICT) > WARD > SUBVILLAGE
 
+## check for subvillage names assigned to multiple administrative units
+subvillage_check  <-  admin_division_check %>% 
+  group_by(subvillage_clean) %>% 
+  summarise(
+    n_regions = n_distinct(region_clean),
+    n_lgas = n_distinct(lga_clean),
+    n_wards = n_distinct(ward_clean)
+  ) %>% 
+  filter(n_regions > 1 | n_lgas > 1 | n_wards > 1)
+  
+
+## Use Latitude/Longitude to check for spatial outliers within each subvillage
+lat_long_check <- admin_division_check %>% 
+  group_by(subvillage_clean) %>% 
+  summarise(
+    lat_sd = sd(latitude, na.rm = TRUE),
+    long_sd = sd(longitude, na.rm = TRUE),
+    n = n()
+  ) %>% 
+  filter(lat_sd > threshold | long_sd > threshold)
 
 
 
