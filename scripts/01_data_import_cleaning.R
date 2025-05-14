@@ -39,7 +39,8 @@ train_values <- read_csv(
     permit = col_logical(),
     public_meeting = col_logical()
     )
-  ) %>% clean_names()
+  ) %>% clean_names() %>% 
+  arrange(id)
 
 
 train_labels <- read_csv(
@@ -51,7 +52,8 @@ train_labels <- read_csv(
       )
     )
   ) %>% 
-  clean_names() 
+  clean_names() %>% 
+  arrange(id)
 
 
 # Merge Data
@@ -91,8 +93,233 @@ problem_wpt_name <- merged_data %>%
   filter(id_count > 1)
 # NOTE: WPT_NAME to ID is not 1:1 -- will use id as unique identifier and will drop 'wpt_name'
 
+## Summary Stats for numeric variables
+summ_stats_all <- merged_data %>% 
+  summarise(across(where(is.numeric),
+                   .fns = list(
+                     min = ~min(., na.rm = TRUE),
+                     median = ~median(., na.rm = TRUE),
+                     mean = ~mean(., na.rm = TRUE),
+                     stdev = ~sd(., na.rm = TRUE),
+                     q25 = ~quantile(., 0.25, na.rm = TRUE),
+                     q75 = ~quantile(., 0.75, na.rm = TRUE),
+                     max = ~max(., na.rm = TRUE)
+                   )
+  )) %>% 
+  pivot_longer(
+    everything(),
+    names_pattern = "^(.*)_(min|median|mean|stdev|q25|q75|max)$",
+    names_to = c("variable", ".value")
+  )
 
-# Clean/Validate Geographic Data
+
+# Inspect AMOUNT_TSH
+## Histogram -- Overall
+amount_tsh_median <- median(merged_data$amount_tsh, na.rm = TRUE)
+
+merged_data %>% 
+  ggplot(aes(x = amount_tsh)) +
+  geom_histogram(fill = "skyblue", color = "black") +
+  geom_vline(
+    aes(xintercept = amount_tsh_median), 
+    color = "red", 
+    linetype = "dashed", 
+    size = 1.2
+  ) +
+  labs(
+    title = "Histogram of amount_tsh with median line",
+    x = "amount_tsh",
+    y = "Frequency"
+  ) +
+  annotate("text", 
+           x = amount_tsh_median, 
+           y = Inf, 
+           label = paste("Median:", round(amount_tsh_median, 2)), vjust = -0.5, color = "red") +
+  theme_minimal()
+
+
+## Histogram -- Exclude amount_tsh = 0 and truncate
+amount_tsh_trunc <- merged_data %>% 
+  select(id, amount_tsh) %>% 
+  filter(amount_tsh != 0) %>% 
+  mutate(
+    amount_tsh_median = median(amount_tsh, na.rm = TRUE),
+    amount_tsh_upper_bound = median(amount_tsh, na.rm = TRUE) + 1.5*IQR(amount_tsh, na.rm = TRUE),
+    amount_tsh_outlier = amount_tsh > amount_tsh_upper_bound,
+    amount_tsh_trunc = ifelse(amount_tsh < amount_tsh_upper_bound, amount_tsh, amount_tsh_upper_bound),
+  ) %>% 
+  select(-amount_tsh_upper_bound)
+
+amount_tsh_median_trunc <- median(amount_tsh_trunc$amount_tsh)
+
+amount_tsh_summ_stats %>% 
+  ggplot(aes(x = amount_tsh_trunc)) +
+  geom_histogram(fill = "skyblue", color = "black") +
+  geom_vline(
+    aes(xintercept = amount_tsh_median_trunc),
+    color = "red",
+    linetype = "dashed",
+    size = 1.2
+  ) +
+  labs(
+    title = "Histogram of amount_tsh (truncated) with median line",
+    x = "amount_tsh (truncated)",
+    y = "Frequency"
+  ) +
+  annotate("text",
+           x = amount_tsh_median_trunc,
+           y = Inf,
+           label = paste("Median:", round(amount_tsh_median_trunc, 2)),
+           hjust = -0.5,
+           vjust = 10,
+           color = "black",
+           size = 5
+           ) +
+  theme_minimal()
+
+
+# Inspect GPS_HEIGHT
+## Histogram -- Overall
+merged_data %>% 
+  ggplot(aes(x = gps_height)) +
+  geom_histogram(fill = "skyblue", color = "black") +
+  geom_vline(
+    aes(xintercept = median(gps_height, na.rm = TRUE)),
+    color = "red",
+    linetype = "dashed",
+    size = 1.2
+  ) +
+  labs(
+    title = "Histogram of gps_height with median line",
+    x = "gps_height",
+    y = "Frequency"
+  )
+
+
+# Inspect NUM_PRIVATE
+merged_data %>% 
+  ggplot(aes(x=num_private)) +
+  geom_histogram(fill = "skyblue", color = "black") +
+  geom_vline(
+    aes(xintercept = median(gps_height, na.rm = TRUE)),
+    color = "red",
+    linetype = "dashed",
+    size = 1.2
+  ) + 
+  labs(
+    title = "Histogram of num_private with median line",
+    x = "num_private",
+    y = "Frequency"
+  )
+
+
+# Inspect POPULATION
+merged_data %>% 
+  ggplot(aes(x=population)) +
+  geom_histogram(fill = "skyblue", color = "black") +
+  geom_vline(
+    aes(xintercept = median(population, na.rm = TRUE)),
+    color = "red",
+    linetype = "dashed",
+    size = 1.2
+  ) + 
+  labs(
+    title = "Histogram of POPULATION with median line",
+    x = "population",
+    y = "Frequency"
+  )
+
+
+# Inspect CONSTRUCTION_YEAR
+merged_data %>% 
+  select(construction_year) %>% 
+  table()
+# NOTE: 20709 cases with construction_year = 0
+
+
+# Validate REGION x REGION_CODE
+merged_data %>% 
+  distinct(region_code, region) %>% 
+  arrange(region_code) %>% 
+  print(n = 40)
+
+
+## Heatmap -- region x region_code
+merged_data %>% 
+  count(region, region_code) %>% 
+  ggplot(aes(y = region, x = region_code, fill = n)) +
+  geom_tile(color = "black") +
+  geom_text(aes(label = region_code), size = 3) +
+  scale_fill_gradient(
+    low = "white",
+    high = "steelblue"
+  ) +
+  labs(
+    title = "Region vs Region_Code Mapping",
+    x = "Region Code",
+    y = "Region",
+    fill = "Count"
+  ) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(hjust = 0.5),
+    axis.text.x = element_blank(),
+    axis.ticks.x = element_blank(),
+    legend.position = "none"
+    )
+# NOTE: Region and Region_Code are not 1:1
+
+
+
+#### Inspect Char variables
+
+# Inspect WATERPOINT_TYPE_GROUP and WATERPOINT_TYPE
+merged_data %>% 
+  distinct(waterpoint_type_group, waterpoint_type)
+
+# Inspect SOURCE X SOURCE_TYPE X SOURCE_CLASS
+merged_data %>% 
+  distinct(source_class, source_type, source) %>% 
+  arrange(source_class, source_type, source)
+
+# Inspect QUANTITY X QUANTITY_GROUP
+merged_data %>% 
+  distinct(quantity_group, quantity) %>% 
+  arrange(quantity_group)
+
+# Inspect QUALITY_GROUP X WATER_QUALITY
+merged_data %>% 
+  distinct(quality_group, water_quality) %>% 
+  arrange(quality_group, water_quality)
+
+# Inspect PAYMENT X PAYMENT_TYPE
+merged_data %>% 
+  distinct(payment_type, payment) %>% 
+  arrange(payment_type, payment)
+
+# Inspect EXTRACTION_TYPE X EXTRACTION_TYPE_GROUP X EXTRACTION_TYPE_CLASS
+merged_data %>% 
+  distinct(extraction_type_class, extraction_type_group, extraction_type) %>% 
+  arrange(extraction_type_class, extraction_type_group, extraction_type)
+
+# Inspect MANAGEMENT X MANAGEMENT_GROUP
+merged_data %>% 
+  distinct(management_group, management) %>% 
+  arrange(management_group, management)
+
+# Inspect SCHEME_MANAGEMENT X MANAGEMENT
+merged_data %>% 
+  distinct(scheme_management, management) %>% 
+  arrange(scheme_management, management) %>% 
+  print(n=100)
+
+
+
+#### Clean/Validate Geographic Data
+admin_division_map <- admin_division_check %>% 
+  count(region,lga,ward) %>% 
+  arrange(desc(region))
+
 geog_data_validation <- merged_data %>% 
   select("id", "longitude", "latitude", "basin", "subvillage", "region", "region_code", "district_code", "lga", "ward") %>% 
   ## Flag missing/implausible geographic coordinates. 
@@ -100,73 +327,22 @@ geog_data_validation <- merged_data %>%
   mutate(
     invalid_coords_flag = is.na(latitude) | is.na(longitude) | latitude < -12 | latitude > 0 | longitude < 29 | longitude > 41
     )
-  ## Flag inconsistencies in region/region_code
 
 
+## Visually inspect Regions on map to identify errors
 tanzania_regions <- st_read(here("data", "tz_shapefile", "nbs_tz_shapefiles", "Tanzania GIS Maps", "Tanzania.shp"))
 
 
-geog_data_validation %>% 
-  count(region, region_code) %>% 
-  print(n = 100)
+#  mutate(mutate(mutate(
+#    across(
+#      .cols = c("subvillage", "region", "lga", "ward", "basin","funder","installer","wpt_name"),
+#      .fns = list(
+#        cleaned = ~str_to_lower(str_squish(.))
+#      ),
+#      .names = "{.col}_clean"
+#    )
+#  )
 
-  mutate(mutate(mutate(
-    across(
-      .cols = c("subvillage", "region", "lga", "ward", "basin","funder","installer","wpt_name"),
-      .fns = list(
-        cleaned = ~str_to_lower(str_squish(.))
-      ),
-      .names = "{.col}_clean"
-    )
-  )
-
-admin_division_map <- admin_division_check %>% 
-  count(region,lga,ward) %>% 
-  arrange(desc(region))
-
-
-table(admin_division_check$basin)
-
-
-
-admin_division_check %>% 
-  count(extraction_type_class) %>% 
-  arrange(desc(n)) %>% 
-  print(n=2100)
-
-
-# admin_division_map <- admin_division_check %>% 
-#  distinct(region, lga, ward)
-admin_division_map <- admin_division_check %>% 
-  count(region, lga, ward) %>% 
-  arrange(desc(n))
-
-
-  
-
-merged_data %>% 
-  select(where(is.character) %>% 
-  map(unique)
-
-## Check REGION mapped to unique REGION_CODE
-problem_region <- admin_division_check %>% 
-  group_by(region_clean) %>% 
-  summarise(reg_code_count = n_distinct(region_code)) %>% 
-  filter(reg_code_count > 1)
-
-## Clean Administrative Division Names
-## REGION > LGA (DISTRICT) > WARD > SUBVILLAGE
-
-## check for subvillage names assigned to multiple administrative units
-subvillage_check  <-  admin_division_check %>% 
-  group_by(subvillage_clean) %>% 
-  summarise(
-    n_regions = n_distinct(region_clean),
-    n_lgas = n_distinct(lga_clean),
-    n_wards = n_distinct(ward_clean)
-  ) %>% 
-  filter(n_regions > 1 | n_lgas > 1 | n_wards > 1)
-  
 
 ## Use Latitude/Longitude to check for spatial outliers within each subvillage
 lat_long_check <- admin_division_check %>% 
@@ -180,154 +356,33 @@ lat_long_check <- admin_division_check %>%
 
 
 
-  group_by(subvillage) %>% 
-  summarise(n_wards = n_distinct(ward))
-
-
-
-## Clean CHAR VARS -- check for duplicates based on inconsistent spelling
-charvars_spell_check <- merged_data %>% 
-  select("id", "funder", "installer", "wpt_name") %>% 
+# --------------------------
+# Finalize Data Cleaning
+# --------------------------
+## Clean
+tz_final_data <- merged_data %>% 
+  # Drop variables no longer needed
+  select(-c("wpt_name", "funder", "installer")) %>% 
   mutate(
+    # Create *_cleaned variables
     across(
-      .cols = where(is.character),
+      .cols = c("region", "lga", "ward", "basin"),
       .fns = list(
-        cleaned = ~str_to_lower(str_squish(.))
+        cleaned = ~str_to_lower(str_trim(.))
       ),
       .names = "{.col}_cleaned"
-    )
-  ) 
-
-charvars_n_distinct <- charvars_spell_check %>% 
-  summarise(across(everything(), ~n_distinct(.)))
-
-
-    
-
-charvars_spell_check %>% 
+    ),
+    # Create pump age
+    pump_age = as.numeric(difftime(ymd(date_recorded), ymd(installation_date), units = "days") / 365.25),
+    # Convert categoricals to factors
+    across()
+    ) %>% 
+  
   
 
-  char_num_unique_values <- train_values %>% 
-  select(where(is.character)) %>% 
-  summarise(across(everything(), ~n_distinct(.))) %>% 
-  pivot_longer(everything(), names_to = "variable", values_to = "n_unique") %>% 
-  arrange(desc(n_unique))
-
-## Summary Statistics
-merged_summ_stats <- merged_data %>% 
-  summarise(across(where(is.numeric),
-                   .fns = list(
-                     min = ~min(., na.rm = TRUE),
-                     median = ~median(., na.rm = TRUE),
-                     mean = ~mean(., na.rm = TRUE),
-                     stdev = ~sd(., na.rm = TRUE),
-                     q25 = ~quantile(., 0.25, na.rm = TRUE),
-                     q75 = ~quantile(., 0.75, na.rm = TRUE),
-                     max = ~max(., na.rm = TRUE)
-                   )
-                   )) %>% 
-  pivot_longer(
-    everything(),
-    names_pattern = "^(.*)_(min|median|mean|stdev|q25|q75|max)$",
-    names_to = c("variable", ".value")
-  )
-
-
-
-## TRAIN_VALUES
-### Missing count - numeric variables
-train_values %>% 
-  summarise(across(where(is.numeric), ~sum(is.na(.))))
-
-### Summary Statistics Table
-train_values_summ_stats <- train_values %>% 
-  summarise(across(where(is.numeric),
-            .fns = list(
-              min = ~min(., na.rm = TRUE),
-              median = ~median(., na.rm = TRUE),
-              mean = ~mean(., na.rm = TRUE),
-              stdev = ~sd(., na.rm = TRUE),
-              q25 = ~quantile(., 0.25, na.rm = TRUE),
-              q75 = ~quantile(., 0.75, na.rm = TRUE),
-              max = ~max(., na.rm = TRUE)
-              )
-            )) %>% 
-  pivot_longer(
-    everything(),
-    names_pattern = "^(.*)_(min|median|mean|stdev|q25|q75|max)$",
-    names_to = c("variable", ".value")
-  )
-
+## Add additional features
 
 # Need to determine which char vars to drop, which to keep based on correlation with outcome of interest
-
-char_num_unique_values <- train_values %>% 
-  select(where(is.character)) %>% 
-  summarise(across(everything(), ~n_distinct(.))) %>% 
-  pivot_longer(everything(), names_to = "variable", values_to = "n_unique") %>% 
-  arrange(desc(n_unique))
-
-train_values %>% 
-  count(installer, sort = TRUE)
-
-
-
-train_values_char_proper_names <- train_values %>% 
-  select("id", c("installer", "funder", "scheme_name", "ward", "lga", "subvillage", "wpt_name", "basin", "region"))
-
-train_values_char_factor <- train_values %>% 
-  select("id", where(is.character), -c("installer", "funder", "scheme_name", "ward", "lga", "subvillage", "wpt_name", "basin", "region"))
-
-train_values_char_proper_names %>% 
-  map(unique)
-
-### Check ID mapped to exactly one WPT_NAME
-id_wpt_check <- train_values_char_proper_names %>% 
-  group_by(id) %>% 
-  summarise(n_wpt = n_distinct(wpt_name), .groups = "drop") %>% 
-  filter(n_wpt > 1)
-
-problem_ids <- id_wpt_check %>% 
-  filter(n_wpt > 1)
-# NOTE: ID & WPT_NAME are mapped 1:1
-
-lga_check <- train_values_char_proper_names %>% 
-  group_by(region) %>% 
-  summarise(n_districts_in_region = n_distinct(lga), .groups = "drop")
-
-
-train_values_char_proper_names %>% 
-  filter(region == "Arusha") %>% 
-  filter(lga == "Ngorongoro") %>% 
-  filter(ward == "Ngorongoro") %>% 
-  map(unique)
-#  select(lga) %>% 
-#  map(unique)
-
-train_values_char_proper_names %>% 
-  group_by(region) %>% 
-  map(unique)
-
-train_values_char_factor %>% 
-  map(unique)
-
-
-
-
-  count(waterpoint_type)
-
-
-train_labels %>% 
-  ggplot(aes(status_group, fill = status_group)) +
-  geom_bar() + 
-  labs(x = NULL, y = NULL)
-
-
-
-
-
-
-
 merged_data <- train_values %>%
   left_join(train_labels, by = "id") %>%
   mutate(
