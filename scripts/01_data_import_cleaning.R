@@ -12,6 +12,8 @@ library(tidyverse)
 library(here)
 library(janitor)
 library(sf)
+library(ggblend)
+library(dbscan)
 #library(lubridate)
 #renv::snapshot()
 
@@ -354,6 +356,136 @@ lat_long_check <- admin_division_check %>%
   ) %>% 
   filter(lat_sd > threshold | long_sd > threshold)
 
+region_code_id <- merged_data %>%
+  group_by(region) %>% 
+  distinct(region_code) %>% 
+  ungroup() %>% 
+  arrange(region, region_code) %>% 
+  group_by(region) %>% 
+  mutate(region_code_id = dense_rank(region_code)) %>% 
+  ungroup()
+
+region_dup_num <- merged_data %>% 
+  group_by(region) %>% 
+  summarise(distinct_region_codes = n_distinct(region_code)) %>% 
+  filter(distinct_region_codes > 1) %>% 
+  ungroup()
+  
+region_dups <- region_dup_num %>% 
+  left_join(region_code_id, by = "region")
+
+set.seed(123)
+subset_merged_data <- merged_data %>% 
+  group_by(region) %>% 
+  slice_sample(n = 500)  # Adjust n per group
+
+
+dup_region_code_check <- merged_data %>% 
+#  filter(region == "Shinyanga") %>% 
+  inner_join(region_dups, by = c("region", "region_code")) %>% 
+  mutate(
+    region_concat = factor(paste(region, region_code, sep = "_")),
+    region_code_id = as.factor(region_code_id)
+    ) %>% 
+  arrange(region_code, region) %>% 
+  ggplot(aes(x = longitude, y = latitude, color = region_code_id)) +
+  geom_point(
+#    aes(shape = ordered(region_code_id)),
+    position = position_jitter(h = 0.1, w = 0.1), 
+    alpha = 0.3, 
+    size = 3
+    ) |>
+  blend("darken") +  
+  scale_fill_brewer(palette = "Dark2", direction = 1) +
+  scale_shape_manual(values = c(16, 17, 18)) +
+#  scale_color_manual(values = c("#66c2a5", "#fc8d62", "#8da0cb")) +
+#  scale_fill_manual(values = c("#9D6C06", "#077DAA", "#026D4E")) +
+#  scale_size_manual(values = c(1, 3, 5)) +
+  facet_wrap(~region, ncol = 2) +
+  xlim(25, 45) +
+  ylim(-15, 0) +
+  labs(
+    x = "Longitude",
+    y = "Latitude",
+    color = "Region Code ID",
+    shape = "Region Code",
+    title = "Scatter Plot of Water Points by Region"
+  ) +
+  theme_minimal()
+  
+
+dup_region_code_check
+
+# Confirmed for regions with multiple region codes by looking at longitude/latitude -- REGIONS with same name are located close to each other
+# despite having different different REGION_CODE value. Can use REGION variable in analysis and/or REGION_CODE for more hyper-local information
+
+
+## GIS
+## Convert coordinates to spatial data
+waterpoints_sf <- merged_data %>% 
+  st_as_sf(
+    coords = c("longitude", "latitude"), 
+    crs = 4326
+    ) %>% 
+  st_transform(32737)
+
+# split by region
+regions <- waterpoints_sf %>% 
+  group_split(region)
+
+# Detect local outliers by region
+detect_outliers <- function(region_sf, k = 10, top_percent = 5) {
+  if (nrow(region_sf) <= k) return(region_sf %>% mutate(lof = NA, outlier = FALSE))
+  
+  coords <- st_coordinates(region_sf)
+  lof_scores <- dbscan::lof(coords, minPts = k)
+  
+  threshold <- quantile(lof_scores, 1 - (top_percent / 100), na.rm = TRUE)
+  
+  region_sf %>%
+    mutate(
+      lof = lof_scores,
+      outlier = lof > threshold
+    )
+}
+
+# Apply to all regions (adjust k and top_percent as needed)
+outliers_list <- lapply(regions, detect_outliers, k = 15, top_percent = 5)
+waterpoints_outliers <- bind_rows(outliers_list)
+
+final_outliers <- waterpoints_outliers %>% filter(outlier)
+
+# Map outliers
+waterpoints_outliers %>% 
+  ggplot() +
+  geom_sf(
+    aes(
+      color = outlier
+      ), 
+    size = 1
+    ) +
+  scale_color_manual(values = c("gray", "red")) +
+  theme_minimal()
+
+
+
+## Calculate centroid and spread for each region
+region_summary <- waterpoints_sf %>%
+  group_by(region) %>%
+  summarise(
+    n = n(),
+    centroid = st_centroid(st_combine(geometry)),
+    spread = max(st_distance(geometry))  # Max distance between points in the ward
+  )
+
+## ID waterpoints far from the region's centroid
+waterpoints_sf <- waterpoints_sf %>%
+  group_by(region) %>%
+  mutate(
+    dist_to_centroid = st_distance(geometry, centroid),
+    is_outlier = dist_to_centroid > quantile(dist_to_centroid, 0.99)  # Top 1% as outliers
+  ) %>%
+  ungroup()
 
 
 # --------------------------
